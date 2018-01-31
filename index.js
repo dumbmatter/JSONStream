@@ -24,10 +24,20 @@ exports.parse = function (path, map) {
     if(data)
       stream.write(data)
     if (header)
-        stream.emit('header', header)
+      stream.emit('header', header)
     if (footer)
       stream.emit('footer', footer)
-    stream.queue(null)
+
+    if (parser.tState != Parser.C.START || parser.stack.length > 0) {
+      stream.emit('error', new Error('Incomplete JSON'))
+      if(!stream.writable && stream.autoDestroy) {
+        process.nextTick(function () {
+          stream.destroy()
+        });
+      }
+    } else {
+      stream.queue(null)
+    }
   })
 
   if('string' === typeof path)
