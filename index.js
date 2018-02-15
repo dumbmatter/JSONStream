@@ -14,6 +14,7 @@ var Parser = require('jsonparse')
 
 exports.parse = function (path, map) {
   var header, footer
+  var seenSomething = false
   var parser = new Parser()
   var stream = through(function (chunk) {
     if('string' === typeof chunk)
@@ -28,15 +29,23 @@ exports.parse = function (path, map) {
     if (footer)
       stream.emit('footer', footer)
 
+    var error = false
     if (parser.tState != Parser.C.START || parser.stack.length > 0) {
       stream.emit('error', new Error('Incomplete JSON'))
+      error = true
+    } else if (!seenSomething) {
+      stream.emit('error', new Error('An empty string is not valid JSON'))
+      error = true
+    } else {
+      stream.queue(null)
+    }
+
+    if (error) {
       if(!stream.writable && stream.autoDestroy) {
         process.nextTick(function () {
           stream.destroy()
         });
       }
-    } else {
-      stream.queue(null)
     }
   })
 
@@ -58,6 +67,8 @@ exports.parse = function (path, map) {
     path = null
 
   parser.onValue = function (value) {
+    seenSomething = true;
+
     if (!this.root)
       stream.root = value
 
@@ -133,6 +144,8 @@ exports.parse = function (path, map) {
   parser._onToken = parser.onToken;
 
   parser.onToken = function (token, value) {
+    seenSomething = true;
+
     parser._onToken(token, value);
     if (this.stack.length === 0) {
       if (stream.root) {
